@@ -1,5 +1,9 @@
 # SalesPOC APIM + API Center Deployment Repo
 
+## Main project
+
+- SalesPOC UI: https://github.com/csdmichael/SalesPOC.UI
+
 This repo deploys and configures the following Azure resources in an idempotent way:
 
 - API Management: `/subscriptions/86b37969-9445-49cf-b03f-d8866235171c/resourceGroups/ai-myaacoub/providers/Microsoft.ApiManagement/service/apim-poc-my`
