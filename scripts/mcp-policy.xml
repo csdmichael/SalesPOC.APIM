@@ -70,9 +70,30 @@
 
   <outbound>
     <base />
+
+    <set-header name="Strict-Transport-Security" exists-action="override">
+      <value>max-age=31536000; includeSubDomains</value>
+    </set-header>
+    <set-header name="X-Frame-Options" exists-action="override">
+      <value>DENY</value>
+    </set-header>
+    <set-header name="Referrer-Policy" exists-action="override">
+      <value>no-referrer</value>
+    </set-header>
   </outbound>
 
   <on-error>
     <base />
+
+    <set-header name="Content-Type" exists-action="override">
+      <value>application/json</value>
+    </set-header>
+    <set-body>@{
+      var requestId = context.RequestId.ToString();
+      var statusCode = context.Response != null ? context.Response.StatusCode : 500;
+      var reasonPhrase = context.Response != null ? context.Response.StatusReason : "Internal Server Error";
+
+      return "{\"error\":\"Request processing failed.\",\"status\":" + statusCode + ",\"reason\":\"" + reasonPhrase + "\",\"requestId\":\"" + requestId + "\"}";
+    }</set-body>
   </on-error>
 </policies>
