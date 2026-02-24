@@ -683,6 +683,8 @@ else {
 }
 
 Write-Step "Ensuring API analysis ruleset configuration exists (no overwrite)"
+
+# --- Attempt 1: CLI-based (az apic api-analysis) ---
 $apicAnalysisAvailable = $false
 try {
     $apicHelp = az apic api-analysis -h 2>&1 | Out-String
@@ -693,6 +695,8 @@ try {
 catch {
 }
 $global:LASTEXITCODE = 0
+
+$rulesetDeployed = $false
 
 if ($apicAnalysisAvailable) {
     $analyzer = $null
@@ -725,14 +729,161 @@ if ($apicAnalysisAvailable) {
         else {
             Write-Warning "Ruleset path not found: $rulesetPath"
         }
+        $rulesetDeployed = $true
     }
     else {
         Write-Host "API analysis config '$ApiAnalyzerConfigName' already exists. Skipping create/import to avoid overwrite." -ForegroundColor Yellow
+        $rulesetDeployed = $true
     }
 }
-else {
-    Write-Warning "This apic-extension version does not support 'az apic api-analysis'. Skipping ruleset configuration."
-    Write-Warning "You can configure API analysis rulesets manually via the Azure portal."
+
+# --- Attempt 2: ARM REST API fallback ---
+if (-not $rulesetDeployed) {
+    Write-Host "'az apic api-analysis' CLI not available. Falling back to ARM REST API." -ForegroundColor Yellow
+
+    # Locate the ruleset file (support both directory and file path)
+    $rulesetFile = $null
+    if (Test-Path $rulesetPath) {
+        if ((Get-Item $rulesetPath).PSIsContainer) {
+            $rulesetFile = Get-ChildItem -Path $rulesetPath -Filter "ruleset.yaml" -Recurse | Select-Object -First 1
+            if ($null -eq $rulesetFile) {
+                $rulesetFile = Get-ChildItem -Path $rulesetPath -Filter "*.yaml" -Recurse | Select-Object -First 1
+            }
+            if ($null -ne $rulesetFile) { $rulesetFile = $rulesetFile.FullName }
+        }
+        else {
+            $rulesetFile = $rulesetPath
+        }
+    }
+
+    if ($null -eq $rulesetFile -or -not (Test-Path $rulesetFile)) {
+        Write-Warning "Ruleset file not found at or under '$rulesetPath'. Cannot deploy analysis config."
+    }
+    else {
+        $rulesetYaml = Get-Content -Path $rulesetFile -Raw
+        Write-Host "Loaded ruleset from: $rulesetFile" -ForegroundColor DarkCyan
+
+        $analyzerApiVersions = @(
+            "2024-06-01-preview",
+            "2024-03-15-preview",
+            "2024-03-01",
+            "2024-03-01-preview"
+        )
+
+        # Resource path candidates (workspace-scoped and service-scoped)
+        $analyzerPathCandidates = @(
+            "$apiCenterResourceId/workspaces/default/analyzerConfigs/$ApiAnalyzerConfigName",
+            "$apiCenterResourceId/analyzerConfigs/$ApiAnalyzerConfigName",
+            "$apiCenterResourceId/workspaces/default/rulesetConfigs/$ApiAnalyzerConfigName",
+            "$apiCenterResourceId/rulesetConfigs/$ApiAnalyzerConfigName"
+        )
+
+        # Check if it already exists
+        $existingAnalyzer = $null
+        foreach ($aPath in $analyzerPathCandidates) {
+            foreach ($aVer in $analyzerApiVersions) {
+                $probe = Try-AzRest -Method "GET" -Uri "${aPath}?api-version=$aVer"
+                if ($null -ne $probe) {
+                    $existingAnalyzer = $probe
+                    Write-Host "API analysis config '$ApiAnalyzerConfigName' already exists. Skipping create/import to avoid overwrite." -ForegroundColor Yellow
+                    $rulesetDeployed = $true
+                    break
+                }
+            }
+            if ($rulesetDeployed) { break }
+        }
+
+        # Create and upload if it doesn't exist
+        if (-not $rulesetDeployed) {
+            # Payload candidates: different ARM schemas for the analyzer config
+            $analyzerPayloads = @(
+                # Schema 1: customRuleset with inline value
+                (@{
+                    properties = @{
+                        state         = "active"
+                        customRuleset = @{
+                            format = "spectral"
+                            value  = $rulesetYaml
+                        }
+                    }
+                } | ConvertTo-Json -Depth 20),
+                # Schema 2: rulesetConfig with inline content
+                (@{
+                    properties = @{
+                        state        = "active"
+                        rulesetConfig = @{
+                            customRuleset = $rulesetYaml
+                        }
+                    }
+                } | ConvertTo-Json -Depth 20),
+                # Schema 3: direct value in properties
+                (@{
+                    properties = @{
+                        title       = "CustomRulesetPOC"
+                        description = "Spectral ruleset for SalesAPI"
+                        state       = "active"
+                        value       = $rulesetYaml
+                    }
+                } | ConvertTo-Json -Depth 20),
+                # Schema 4: minimal (create config only, ruleset uploaded separately)
+                (@{
+                    properties = @{
+                        title       = "CustomRulesetPOC"
+                        description = "Spectral ruleset for SalesAPI"
+                        state       = "active"
+                    }
+                } | ConvertTo-Json -Depth 20)
+            )
+
+            foreach ($aPath in $analyzerPathCandidates) {
+                foreach ($aVer in $analyzerApiVersions) {
+                    foreach ($payload in $analyzerPayloads) {
+                        $created = Try-AzRest -Method "PUT" -Uri "${aPath}?api-version=$aVer" -Body $payload
+                        if ($null -ne $created) {
+                            Write-Host "API analysis config '$ApiAnalyzerConfigName' created via REST (api-version=$aVer)." -ForegroundColor Green
+
+                            # If we used a minimal payload (Schema 4), try uploading the ruleset via a separate action
+                            if ($payload -notmatch 'customRuleset|rulesetConfig|"value"') {
+                                $importActions = @(
+                                    "${aPath}/importRuleset?api-version=$aVer",
+                                    "${aPath}:importRuleset?api-version=$aVer"
+                                )
+                                $importPayloads = @(
+                                    (@{ format = "spectral"; value = $rulesetYaml } | ConvertTo-Json -Depth 10),
+                                    (@{ content = $rulesetYaml; format = "spectral" } | ConvertTo-Json -Depth 10)
+                                )
+                                $rulesetUploaded = $false
+                                foreach ($importUri in $importActions) {
+                                    foreach ($importBody in $importPayloads) {
+                                        $importResult = Try-AzRest -Method "POST" -Uri $importUri -Body $importBody
+                                        if ($null -ne $importResult) {
+                                            Write-Host "Ruleset uploaded via REST action." -ForegroundColor Green
+                                            $rulesetUploaded = $true
+                                            break
+                                        }
+                                    }
+                                    if ($rulesetUploaded) { break }
+                                }
+                                if (-not $rulesetUploaded) {
+                                    Write-Warning "Analyzer config was created but the ruleset could not be uploaded via REST. Import the ruleset manually in the Azure portal from: $rulesetFile"
+                                }
+                            }
+
+                            $rulesetDeployed = $true
+                            break
+                        }
+                    }
+                    if ($rulesetDeployed) { break }
+                }
+                if ($rulesetDeployed) { break }
+            }
+        }
+    }
+
+    if (-not $rulesetDeployed) {
+        Write-Warning "Could not deploy API analysis ruleset via CLI or ARM REST API."
+        Write-Warning "Manual fallback: In Azure Portal > API Center '$ApiCenterName' > API Analysis, upload the ruleset from: $rulesetFile"
+    }
 }
 
 Write-Host "\nDeployment script completed." -ForegroundColor Green
