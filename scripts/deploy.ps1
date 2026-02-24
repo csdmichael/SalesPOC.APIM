@@ -652,6 +652,7 @@ try {
 }
 catch {
 }
+$global:LASTEXITCODE = 0
 
 if ($apicAnalysisAvailable) {
     $analyzer = $null
@@ -696,3 +697,5 @@ else {
 
 Write-Host "\nDeployment script completed." -ForegroundColor Green
 Write-Host "Resources were created only when missing; existing resources were not overwritten." -ForegroundColor Green
+
+exit 0
