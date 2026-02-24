@@ -41,7 +41,7 @@ jobs:
             -SubscriptionId "86b37969-9445-49cf-b03f-d8866235171c" `
             -ResourceGroupName "ai-myaacoub" `
             -ApimServiceName "apim-poc-my" `
-            -ApiCenterName "api-center-poc-my-std" `
+            -ApiCenterName "api-center-poc-my" `
             -AppServiceName "salespoc-api" `
             -ApiDisplayName "SalesAPI" `
             -ApiId "salesApi" `
