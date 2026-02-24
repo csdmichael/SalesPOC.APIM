@@ -36,7 +36,7 @@ param(
     [string]$ApiCenterIntegrationName = "apim-poc-my-prod",
 
     [Parameter(Mandatory = $false)]
-    [string]$ApiVersionId = "v10",
+    [string]$ApiVersionId = "v1",
 
     [Parameter(Mandatory = $false)]
     [string]$ApiDefinitionId = "openapi",
@@ -559,7 +559,7 @@ if ($null -eq $definition) {
             --definition-id $ApiDefinitionId `
             --format link `
             --value $OpenApiUrl `
-            --specification "{\"name\":\"openapi\",\"version\":\"3.0.0\"}"
+            --specification name=openapi version=3.0.1
     }
 }
 else {
