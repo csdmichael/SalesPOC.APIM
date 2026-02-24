@@ -165,6 +165,9 @@ if ($ApiVersionIdEffective -notmatch '^[a-zA-Z0-9-]{3,90}$') {
     $ApiVersionIdEffective = $sanitizedVersionId
 }
 
+$ApiVersionId = $ApiVersionIdEffective
+Write-Host "Using API Center version id: $ApiVersionId" -ForegroundColor DarkCyan
+
 $definitionScopedId = "/workspaces/default/apis/$ApiId/versions/$ApiVersionIdEffective/definitions/$ApiDefinitionId"
 
 Write-Step "Setting Azure subscription"
