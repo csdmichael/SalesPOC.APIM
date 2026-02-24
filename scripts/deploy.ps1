@@ -411,7 +411,9 @@ catch {
 }
 
 if ($null -eq $deployment) {
-    $serverObject = "{\"runtimeUri\":[\"https://$ApimServiceName.azure-api.net/$ApiPath\"]}"
+    $serverObject = @{
+        runtimeUri = @("https://$ApimServiceName.azure-api.net/$ApiPath")
+    } | ConvertTo-Json -Compress
     Invoke-Az {
         az apic api deployment create `
             --resource-group $ResourceGroupName `
