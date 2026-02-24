@@ -344,28 +344,42 @@ else {
 }
 
 Write-Step "Ensuring API Center integration to APIM exists (no overwrite)"
-$integration = $null
+$apicRootHelp = ""
 try {
-    $integration = az apic integration show --resource-group $ResourceGroupName --service-name $ApiCenterName --integration-name $ApiCenterIntegrationName -o json | ConvertFrom-Json
+    $apicRootHelp = az apic -h 2>&1 | Out-String
 }
 catch {
-    $integration = $null
+    $apicRootHelp = ""
 }
 
-if ($null -ne $integration) {
-    Write-Host "API Center integration '$ApiCenterIntegrationName' already exists. Skipping." -ForegroundColor Yellow
+if ($apicRootHelp -match "\bintegration\b") {
+    $integration = $null
+    try {
+        $integration = az apic integration show --resource-group $ResourceGroupName --service-name $ApiCenterName --integration-name $ApiCenterIntegrationName -o json 2>$null | ConvertFrom-Json
+    }
+    catch {
+        $integration = $null
+    }
+
+    if ($null -ne $integration) {
+        Write-Host "API Center integration '$ApiCenterIntegrationName' already exists. Skipping." -ForegroundColor Yellow
+    }
+    else {
+        Invoke-Az {
+            az apic integration create apim `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --integration-name $ApiCenterIntegrationName `
+                --azure-apim $apimResourceId `
+                --target-environment-id $environmentScopedId `
+                --target-lifecycle-stage production `
+                --import-specification ondemand
+        }
+    }
 }
 else {
-    Invoke-Az {
-        az apic integration create apim `
-            --resource-group $ResourceGroupName `
-            --service-name $ApiCenterName `
-            --integration-name $ApiCenterIntegrationName `
-            --azure-apim $apimResourceId `
-            --target-environment-id $environmentScopedId `
-            --target-lifecycle-stage production `
-            --import-specification ondemand
-    }
+    Write-Warning "This apic-extension version does not expose 'az apic integration'. Skipping integration creation."
+    Write-Warning "Optional fallback: use 'az apic import-from-apim' if you want API synchronization from APIM in this environment."
 }
 
 Write-Step "Ensuring API Center API '$ApiDisplayName' exists"
