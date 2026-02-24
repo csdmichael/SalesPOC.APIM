@@ -300,7 +300,7 @@ if ($mcpCreated -and (Test-Path $mcpPolicyPath)) {
 Write-Step "Ensuring API Center Production environment exists (no overwrite)"
 $environment = $null
 try {
-    $environment = az apic environment show --resource-group $ResourceGroupName --service-name $ApiCenterName --environment-id $ApiCenterEnvironmentId -o json | ConvertFrom-Json
+    $environment = az apic environment show --resource-group $ResourceGroupName --service-name $ApiCenterName --environment-id $ApiCenterEnvironmentId -o json 2>$null | ConvertFrom-Json
 }
 catch {
     $environment = $null
@@ -313,14 +313,33 @@ else {
     $serverObject = @{
         runtimeUri = @("https://$ApimServiceName.azure-api.net")
     } | ConvertTo-Json -Compress
-    Invoke-Az {
-        az apic environment create `
-            --resource-group $ResourceGroupName `
-            --service-name $ApiCenterName `
-            --environment-id $ApiCenterEnvironmentId `
-            --title "Production - $ApimServiceName" `
-            --type production `
-            --server $serverObject
+
+    $environmentCreated = $false
+    try {
+        Invoke-Az {
+            az apic environment create `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --environment-id $ApiCenterEnvironmentId `
+                --title "Production - $ApimServiceName" `
+                --type production `
+                --server $serverObject
+        }
+        $environmentCreated = $true
+    }
+    catch {
+        Write-Warning "API Center environment create with --server payload failed. Retrying without --server."
+    }
+
+    if (-not $environmentCreated) {
+        Invoke-Az {
+            az apic environment create `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --environment-id $ApiCenterEnvironmentId `
+                --title "Production - $ApimServiceName" `
+                --type production
+        }
     }
 }
 
@@ -436,7 +455,7 @@ else {
 Write-Step "Ensuring API deployment exists (SalesAPI in Production environment)"
 $deployment = $null
 try {
-    $deployment = az apic api deployment show --resource-group $ResourceGroupName --service-name $ApiCenterName --api-id $ApiId --deployment-id $ApiDeploymentId -o json | ConvertFrom-Json
+    $deployment = az apic api deployment show --resource-group $ResourceGroupName --service-name $ApiCenterName --api-id $ApiId --deployment-id $ApiDeploymentId -o json 2>$null | ConvertFrom-Json
 }
 catch {
     $deployment = $null
@@ -446,17 +465,39 @@ if ($null -eq $deployment) {
     $serverObject = @{
         runtimeUri = @("https://$ApimServiceName.azure-api.net/$ApiPath")
     } | ConvertTo-Json -Compress
-    Invoke-Az {
-        az apic api deployment create `
-            --resource-group $ResourceGroupName `
-            --service-name $ApiCenterName `
-            --api-id $ApiId `
-            --deployment-id $ApiDeploymentId `
-            --title "Production deployment" `
-            --description "APIM production deployment" `
-            --environment-id $environmentScopedId `
-            --definition-id $definitionScopedId `
-            --server $serverObject
+
+    $deploymentCreated = $false
+    try {
+        Invoke-Az {
+            az apic api deployment create `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --api-id $ApiId `
+                --deployment-id $ApiDeploymentId `
+                --title "Production deployment" `
+                --description "APIM production deployment" `
+                --environment-id $environmentScopedId `
+                --definition-id $definitionScopedId `
+                --server $serverObject
+        }
+        $deploymentCreated = $true
+    }
+    catch {
+        Write-Warning "API Center deployment create with --server payload failed. Retrying without --server."
+    }
+
+    if (-not $deploymentCreated) {
+        Invoke-Az {
+            az apic api deployment create `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --api-id $ApiId `
+                --deployment-id $ApiDeploymentId `
+                --title "Production deployment" `
+                --description "APIM production deployment" `
+                --environment-id $environmentScopedId `
+                --definition-id $definitionScopedId
+        }
     }
 }
 else {
