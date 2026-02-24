@@ -444,16 +444,20 @@ catch {
 if ($null -eq $apicApi) {
     try {
         $apicApis = az apic api list --resource-group $ResourceGroupName --service-name $ApiCenterName -o json 2>$null | ConvertFrom-Json
-        $caseInsensitiveMatch = $apicApis | Where-Object { $_.name -ieq $ApiId } | Select-Object -First 1
-        if ($null -ne $caseInsensitiveMatch) {
-            $ApiId = $caseInsensitiveMatch.name
+        $apiMatch = $apicApis | Where-Object { $_.name -ieq $ApiId } | Select-Object -First 1
+        if ($null -eq $apiMatch) {
+            $apiMatch = $apicApis | Where-Object { $_.title -ieq $ApiDisplayName } | Select-Object -First 1
+        }
+
+        if ($null -ne $apiMatch) {
+            $ApiId = $apiMatch.name
             $definitionScopedIdCandidates = @(
                 "/workspaces/default/apis/$ApiId/versions/$ApiCenterVersionId/definitions/$ApiDefinitionId",
                 "/apis/$ApiId/versions/$ApiCenterVersionId/definitions/$ApiDefinitionId"
             )
             $definitionScopedId = $definitionScopedIdCandidates[0]
-            $apicApi = $caseInsensitiveMatch
-            Write-Host "API Center API resolved by case-insensitive match. Using API id '$ApiId'." -ForegroundColor Yellow
+            $apicApi = $apiMatch
+            Write-Host "API Center API resolved from existing resources. Using API id '$ApiId'." -ForegroundColor Yellow
         }
     }
     catch {
@@ -476,6 +480,27 @@ else {
 }
 
 Write-Step "Ensuring API Center API version exists"
+try {
+    $existingVersions = az apic api version list --resource-group $ResourceGroupName --service-name $ApiCenterName --api-id $ApiId -o json 2>$null | ConvertFrom-Json
+    $versionMatch = $existingVersions | Where-Object { $_.name -ieq $ApiVersionId -or $_.title -ieq $ApiVersionId } | Select-Object -First 1
+    if ($null -ne $versionMatch -and -not [string]::IsNullOrWhiteSpace($versionMatch.name)) {
+        $ApiCenterVersionId = $versionMatch.name
+        Write-Host "API Center version resolved from existing resources. Using version id '$ApiCenterVersionId'." -ForegroundColor Yellow
+    }
+}
+catch {
+}
+
+if ($ApiCenterVersionId -ne $ApiVersionId) {
+    Write-Warning "Input ApiVersionId '$ApiVersionId' is used as display title; CLI resource id is '$ApiCenterVersionId'."
+}
+
+$definitionScopedIdCandidates = @(
+    "/workspaces/default/apis/$ApiId/versions/$ApiCenterVersionId/definitions/$ApiDefinitionId",
+    "/apis/$ApiId/versions/$ApiCenterVersionId/definitions/$ApiDefinitionId"
+)
+$definitionScopedId = $definitionScopedIdCandidates[0]
+
 Write-Host "API Center version-id argument: $ApiCenterVersionId" -ForegroundColor DarkCyan
 $apiVersion = $null
 try {
@@ -492,7 +517,7 @@ if ($null -eq $apiVersion) {
             --service-name $ApiCenterName `
             --api-id $ApiId `
             --version-id $ApiCenterVersionId `
-            --title "Version $ApiCenterVersionId" `
+            --title "Version $ApiVersionId" `
             --lifecycle-stage production
     }
 }
