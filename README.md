@@ -14,6 +14,13 @@ This repo deploys and configures the following Azure resources in an idempotent 
 1. **APIM API**
    - Ensures an API named `SalesPOC-API` exists in APIM.
    - Imports from App Service OpenAPI endpoint only if missing.
+   - Auto-detects OpenAPI from common App Service paths:
+     - `/openapi/v1.json`
+     - `/openapi.json`
+     - `/swagger/v1/swagger.json`
+     - `/swagger.json`
+     - `/v3/api-docs`
+   - You can override detection by passing `-OpenApiUrl` to `scripts/deploy.ps1`.
 
 2. **APIM MCP Server**
    - Attempts to create MCP server from `SalesPOC-API`.

@@ -95,13 +95,45 @@ function Invoke-Az {
     }
 }
 
+function Resolve-OpenApiUrl {
+    param(
+        [string]$AppServiceName,
+        [string]$ExplicitUrl
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitUrl)) {
+        return $ExplicitUrl
+    }
+
+    $candidates = @(
+        "https://$AppServiceName.azurewebsites.net/openapi/v1.json",
+        "https://$AppServiceName.azurewebsites.net/openapi.json",
+        "https://$AppServiceName.azurewebsites.net/swagger/v1/swagger.json",
+        "https://$AppServiceName.azurewebsites.net/swagger.json",
+        "https://$AppServiceName.azurewebsites.net/v3/api-docs"
+    )
+
+    foreach ($candidate in $candidates) {
+        try {
+            $response = Invoke-WebRequest -Uri $candidate -Method Get -TimeoutSec 20 -UseBasicParsing
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+                return $candidate
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
+    throw "Could not find an OpenAPI endpoint for App Service '$AppServiceName'. Provide -OpenApiUrl explicitly or expose one of: /openapi/v1.json, /openapi.json, /swagger/v1/swagger.json, /swagger.json, /v3/api-docs"
+}
+
 if (-not (Command-Exists "az")) {
     throw "Azure CLI is required."
 }
 
-if ([string]::IsNullOrWhiteSpace($OpenApiUrl)) {
-    $OpenApiUrl = "https://$AppServiceName.azurewebsites.net/openapi/v1.json"
-}
+$OpenApiUrl = Resolve-OpenApiUrl -AppServiceName $AppServiceName -ExplicitUrl $OpenApiUrl
+Write-Host "Using OpenAPI URL: $OpenApiUrl" -ForegroundColor DarkCyan
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
