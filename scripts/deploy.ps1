@@ -386,7 +386,14 @@ else {
 try {
     $resolvedEnvironment = az apic environment show --resource-group $ResourceGroupName --service-name $ApiCenterName --environment-id $ApiCenterEnvironmentId -o json 2>$null | ConvertFrom-Json
     if ($null -ne $resolvedEnvironment -and -not [string]::IsNullOrWhiteSpace($resolvedEnvironment.id)) {
-        $environmentScopedId = $resolvedEnvironment.id
+        $fullId = $resolvedEnvironment.id
+        if ($fullId -match '(/workspaces/.+)$') {
+            $environmentScopedId = $Matches[1]
+        } elseif ($fullId -match '(/environments/.+)$') {
+            $environmentScopedId = $Matches[1]
+        } else {
+            $environmentScopedId = $fullId
+        }
         Write-Host "Using API Center environment id: $environmentScopedId" -ForegroundColor DarkCyan
     }
 }
@@ -569,7 +576,14 @@ else {
 try {
     $resolvedDefinition = az apic api definition show --resource-group $ResourceGroupName --service-name $ApiCenterName --api-id $ApiId --version-id $ApiCenterVersionId --definition-id $ApiDefinitionId -o json 2>$null | ConvertFrom-Json
     if ($null -ne $resolvedDefinition -and -not [string]::IsNullOrWhiteSpace($resolvedDefinition.id)) {
-        $definitionScopedId = $resolvedDefinition.id
+        $fullId = $resolvedDefinition.id
+        if ($fullId -match '(/workspaces/.+)$') {
+            $definitionScopedId = $Matches[1]
+        } elseif ($fullId -match '(/apis/.+)$') {
+            $definitionScopedId = $Matches[1]
+        } else {
+            $definitionScopedId = $fullId
+        }
         Write-Host "Using API Center definition id: $definitionScopedId" -ForegroundColor DarkCyan
     }
 }
