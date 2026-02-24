@@ -36,7 +36,7 @@ param(
     [string]$ApiCenterIntegrationName = "apim-poc-my-prod",
 
     [Parameter(Mandatory = $false)]
-    [string]$ApiVersionId = "v1",
+    [string]$ApiVersionId = "1",
 
     [Parameter(Mandatory = $false)]
     [string]$ApiDefinitionId = "openapi",
