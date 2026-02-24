@@ -278,7 +278,9 @@ if ($null -ne $environment) {
     Write-Host "API Center environment '$ApiCenterEnvironmentId' already exists. Skipping." -ForegroundColor Yellow
 }
 else {
-    $serverObject = "{\"runtimeUri\":[\"https://$ApimServiceName.azure-api.net\"]}"
+    $serverObject = @{
+        runtimeUri = @("https://$ApimServiceName.azure-api.net")
+    } | ConvertTo-Json -Compress
     Invoke-Az {
         az apic environment create `
             --resource-group $ResourceGroupName `
