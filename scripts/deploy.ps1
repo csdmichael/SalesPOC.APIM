@@ -643,39 +643,55 @@ else {
 }
 
 Write-Step "Ensuring API analysis ruleset configuration exists (no overwrite)"
-$analyzer = $null
+$apicAnalysisAvailable = $false
 try {
-    $analyzer = az apic api-analysis show --resource-group $ResourceGroupName --service-name $ApiCenterName --analyzer-config-name $ApiAnalyzerConfigName -o json | ConvertFrom-Json
+    $apicHelp = az apic api-analysis -h 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $apicHelp -notmatch 'is misspelled or not recognized') {
+        $apicAnalysisAvailable = $true
+    }
 }
 catch {
-    $analyzer = $null
 }
 
-if ($null -eq $analyzer) {
-    Invoke-Az {
-        az apic api-analysis create `
-            --resource-group $ResourceGroupName `
-            --service-name $ApiCenterName `
-            --analyzer-config-name $ApiAnalyzerConfigName `
-            --title "CustomRulesetPOC" `
-            --description "Spectral ruleset for SalesAPI"
+if ($apicAnalysisAvailable) {
+    $analyzer = $null
+    try {
+        $analyzer = az apic api-analysis show --resource-group $ResourceGroupName --service-name $ApiCenterName --analyzer-config-name $ApiAnalyzerConfigName -o json 2>$null | ConvertFrom-Json
+    }
+    catch {
+        $analyzer = $null
     }
 
-    if (Test-Path $rulesetPath) {
+    if ($null -eq $analyzer) {
         Invoke-Az {
-            az apic api-analysis import-ruleset `
+            az apic api-analysis create `
                 --resource-group $ResourceGroupName `
                 --service-name $ApiCenterName `
                 --analyzer-config-name $ApiAnalyzerConfigName `
-                --path $rulesetPath
+                --title "CustomRulesetPOC" `
+                --description "Spectral ruleset for SalesAPI"
+        }
+
+        if (Test-Path $rulesetPath) {
+            Invoke-Az {
+                az apic api-analysis import-ruleset `
+                    --resource-group $ResourceGroupName `
+                    --service-name $ApiCenterName `
+                    --analyzer-config-name $ApiAnalyzerConfigName `
+                    --path $rulesetPath
+            }
+        }
+        else {
+            Write-Warning "Ruleset path not found: $rulesetPath"
         }
     }
     else {
-        Write-Warning "Ruleset path not found: $rulesetPath"
+        Write-Host "API analysis config '$ApiAnalyzerConfigName' already exists. Skipping create/import to avoid overwrite." -ForegroundColor Yellow
     }
 }
 else {
-    Write-Host "API analysis config '$ApiAnalyzerConfigName' already exists. Skipping create/import to avoid overwrite." -ForegroundColor Yellow
+    Write-Warning "This apic-extension version does not support 'az apic api-analysis'. Skipping ruleset configuration."
+    Write-Warning "You can configure API analysis rulesets manually via the Azure portal."
 }
 
 Write-Host "\nDeployment script completed." -ForegroundColor Green
