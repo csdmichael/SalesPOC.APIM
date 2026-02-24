@@ -552,21 +552,61 @@ if ($null -eq $definition) {
             --resource-group $ResourceGroupName `
             --service-name $ApiCenterName `
             --api-id $ApiId `
-                --version-id $ApiCenterVersionId `
+            --version-id $ApiCenterVersionId `
             --definition-id $ApiDefinitionId `
             --title "OpenAPI"
     }
 
-    Invoke-Az {
-        az apic api definition import-specification `
-            --resource-group $ResourceGroupName `
-            --service-name $ApiCenterName `
-            --api-id $ApiId `
-            --version-id $ApiCenterVersionId `
-            --definition-id $ApiDefinitionId `
-            --format link `
-            --value $OpenApiUrl `
-            --specification name=openapi version=3.0.1
+    $specImported = $false
+
+    # Try link-based import first (works when the URL is publicly reachable from Azure)
+    try {
+        Invoke-Az {
+            az apic api definition import-specification `
+                --resource-group $ResourceGroupName `
+                --service-name $ApiCenterName `
+                --api-id $ApiId `
+                --version-id $ApiCenterVersionId `
+                --definition-id $ApiDefinitionId `
+                --format link `
+                --value $OpenApiUrl `
+                --specification name=openapi version=3.0.1
+        }
+        $specImported = $true
+    }
+    catch {
+        Write-Warning "Link-based import failed (URL may not be reachable from Azure). Falling back to inline import."
+    }
+
+    # Fallback: download the spec locally and import inline
+    if (-not $specImported) {
+        Write-Host "Downloading OpenAPI spec from $OpenApiUrl ..." -ForegroundColor DarkCyan
+        $specContent = (Invoke-WebRequest -Uri $OpenApiUrl -Method Get -TimeoutSec 30 -UseBasicParsing).Content
+
+        $specTempFile = Join-Path ([System.IO.Path]::GetTempPath()) "openapi-spec-$([guid]::NewGuid().ToString('N')).json"
+        try {
+            [System.IO.File]::WriteAllText($specTempFile, $specContent)
+
+            Invoke-Az {
+                az apic api definition import-specification `
+                    --resource-group $ResourceGroupName `
+                    --service-name $ApiCenterName `
+                    --api-id $ApiId `
+                    --version-id $ApiCenterVersionId `
+                    --definition-id $ApiDefinitionId `
+                    --format inline `
+                    --value $specTempFile `
+                    --specification name=openapi version=3.0.1
+            }
+            $specImported = $true
+        }
+        finally {
+            if (Test-Path $specTempFile) { Remove-Item $specTempFile -Force }
+        }
+    }
+
+    if (-not $specImported) {
+        throw "Failed to import OpenAPI specification into API Center definition '$ApiDefinitionId'."
     }
 }
 else {
