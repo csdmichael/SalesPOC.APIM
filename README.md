@@ -51,17 +51,15 @@ This repo is designed to **not overwrite existing resources**:
 
 Workflow file: `.github/workflows/deploy-to-azure.yml`
 
-### Required GitHub secret
+### Required GitHub secrets
 
-Set `AZURE_CREDENTIALS` in your GitHub repo secrets with a service principal JSON from:
+Set the following repository secrets for `azure/login@v2`:
 
-```bash
-az ad sp create-for-rbac \
-  --name "github-salespoc-apim-apic" \
-  --role Contributor \
-  --scopes /subscriptions/86b37969-9445-49cf-b03f-d8866235171c/resourceGroups/ai-myaacoub \
-  --sdk-auth
-```
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+
+These values should come from the service principal (app registration) used by GitHub Actions.
 
 ## Run locally
 
