@@ -36,8 +36,7 @@ This repo deploys and configures the following Azure resources in an idempotent 
 This repo is designed to **not overwrite existing resources**:
 
 - If a target resource/config already exists, the script logs and skips it.
-- Existing APIM/API Center resources are not replaced.
-- Existing analyzer config is not re-imported.
+- Existing APIM resources are not replaced.
 
 ## GitHub Actions workflow
 
