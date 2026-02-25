@@ -1,4 +1,4 @@
-# SalesPOC APIM + API Center Deployment Repo
+# SalesPOC APIM Deployment Repo
 
 ## Main project
 
@@ -7,7 +7,6 @@
 This repo deploys and configures the following Azure resources in an idempotent way:
 
 - API Management: `/subscriptions/86b37969-9445-49cf-b03f-d8866235171c/resourceGroups/ai-myaacoub/providers/Microsoft.ApiManagement/service/apim-poc-my`
-- API Center: `/subscriptions/86b37969-9445-49cf-b03f-d8866235171c/resourceGroups/ai-myaacoub/providers/Microsoft.ApiCenter/services/api-center-poc-my`
 
 ## What it configures
 
@@ -31,20 +30,6 @@ This repo deploys and configures the following Azure resources in an idempotent 
      - harmful/hate pattern checks
      - rate limit + quota
 
-3. **API Center Environment + APIM Integration**
-   - Ensures a `production` environment exists in API Center.
-   - Ensures APIM integration exists and targets that environment.
-
-4. **API Center API registration**
-   - Ensures API `SalesPOC-API` exists in API Center with:
-     - version `v1`
-     - definition `openapi`
-     - deployment `production`
-
-5. **API analysis ruleset**
-   - Creates analyzer config `CustomRulesetPOC` (config id: `customrulesetpoc`) if missing.
-   - Imports custom Spectral ruleset from `scripts/spectral/CustomRulesetPOC`.
-   - Ruleset extends `spectral:oas` and turns off rule `oas3-schema` to avoid blocking date-in-string validation constraints.
 
 ## Non-overwrite behavior
 
